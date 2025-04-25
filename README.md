@@ -137,6 +137,14 @@ world.views.subscribe('hero-position', (hero: Entity|undefined) => {
 });
 ```
 
+## License
+
+Play State is licensed under "CC BY 4.0" license.
+The complete text of the license can be found in the [LICENSE.txt](./LICENSE.txt) file in this directory.
+
+This license allows you to use Play State in your game projects for free,
+as long as you add credits to Play State's author in your game's credits.
+
 ## Future Features
 
 - **Concurrent Event Handling.** If each System declares which components they read and which components they write, we can know which handlers can be called in parallel, thus optimizing event delivery routine.
