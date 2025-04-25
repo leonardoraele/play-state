@@ -5,6 +5,9 @@
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "exports": "./dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -35,5 +38,11 @@
     "systems",
     "event",
     "events"
-  ]
+  ],
+  "dependencies": {
+    "@leonardoraele/jtd": "^0.1.0",
+    "extra-iterator": "^0.5.0",
+    "signal-controller": "^0.1.1",
+    "uuid": "^11.1.0"
+  }
 }
