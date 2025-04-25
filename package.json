@@ -1,0 +1,39 @@
+{
+  "name": "play-state",
+  "description": "A state management framework for games.",
+  "author": "Leonardo Raele <leonardoraele@gmail.com>",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "exports": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "prebuild": "rimraf dist",
+    "test": "concurrently npm:test:unit npm:test:types",
+    "test:types": "tsc --noEmit",
+    "test:unit": "node --import=tsx --test ./src/**/*.test.ts",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "game",
+    "play",
+    "state",
+    "management",
+    "manager",
+    "store",
+    "entity",
+    "entities",
+    "component",
+    "components",
+    "system",
+    "systems",
+    "event",
+    "events"
+  ]
+}
