@@ -3,7 +3,7 @@
   "description": "A state management framework for games.",
   "author": "Leonardo Raele <leonardoraele@gmail.com>",
   "version": "0.1.0",
-  "license": "MIT",
+  "license": "CC BY 4.0",
   "type": "module",
   "files": [
     "dist"
