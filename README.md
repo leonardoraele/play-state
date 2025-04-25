@@ -1,4 +1,6 @@
-This document describes a state management framework for games. It was written with JavaScript in mind, but the concepts should be adaptable to any programming language.
+# Play State
+
+> ### ⚠ Play State is still in early development. It is missing a lot of features, it has no tests yet, and no debugging tools. It is not ready for use. Please check on it again later.
 
 This system is based on the Entity-Component-System framework and on concepts from Event-Driven Architecture Design — particularly, on the idea that systems communicate asynchronously via events. It is also inspired on the architecture of the game Desktop Dungeons by QCF Design, which is explained in depth in the [Dynamic Event-Listeners in Desktop Dungeons at Roguelike Celebration 2018](https://www.youtube.com/watch?v=p48ArjJweSo) talk.
 
@@ -35,279 +37,104 @@ This system is based on the Entity-Component-System framework and on concepts fr
 - **Event.** Events are messages that can be inserted into the World manually by the client (you), or emitted by the System themselves in response to things that happen. It represents things happening in the world, like the Player entering input, NPCs attempting to perform actions, etc.
 	- When an Event is dispatched into the World, the framework navigates through each System in the World and calls its `handle` function. A System should inspect the Event and either handle it or ignore it. Handling usually means it will search the World for relevant Entities and modify their data accordingly.
 	- Alternatively, Systems can also emit different Events in response, or *transform* Events they receive, modifying their data before the next System handles it. This is similar to handling streams.
+- **Views.** Views are aggregations of state represented in well structured, JSON-like, format that is easy for external
+	systems to parse.
+	- Views allow external code to read the state of the World in a structured way, without having to
+	query entities and interpret components.
+	- They also serve as an interface from which external systems read the world,
+	which decouples those systems from the actual underlying representation of the data. i.e. You can change the
+	structure of your components and entitites, and external systems will still work as long as you update the views
+	accordingly.
+	- Views are automatically updated by the framework when relevant component data changes, and they emit events that
+	external systems can listen to.
 
-## Data Structure
-
-```graph-selector
-World
-    -->: EntityManager
-        many -->: Entity
-            many -->: Component
-    -->: SystemManager
-        many -->: System
-            ..>: SystemEvent
-    -->: ViewManager
-        many --: ViewDefinition
-```
-
-## API Example
+## Example
 
 ```ts
-const MyWorld: World = createWorldDefinition()
-	// Define parameters to be received at world creation
-	.withParameters(parameters as JTDSchema<unknown>)
-	// Add component definitions
-	.withComponent(...definitions as ComponentDefinition[])
-	.withComponents(definitions as ComponentDefinition[])
-	// Defines singleton entities that should be added to every world instance
-	// at initialization. Usually have an id that is known to systems.
-	.withEntity(...newEntity as EntityCreationCommand[])
-	.withEntities(newEntity as EntityCreationCommand[])
-	// Defines an index
-	.withIndex(definition as IndexDefinition)
-	// Adds systems to the world definition
-	.withSystem(...systems as System[])
-	.withSystems(systems as System[])
-	// Adds views to the world definition
-	.withView(...definitions as ViewDefinition)
-	.withViews(definitions as ViewDefinition[])
-	// Installs a plugin, which contain a set of pre-configures entities
-	// components, systems, indexes, etc.
-	.use(ExamplePlugin as PluginDefinition);
+import { createWorldDefinition, FrameUpdatePlugin } from 'play-state';
 
-interface ComponentDefinition<T = unknown> {
-	/** Unique identifier of the component type. */
-	type: string;
-	/** Optional definition of the component's data. */
-	schema?: JTDSchema<T>;
-	/** If provided, this data will be cloned with the
-	 * `globalThis.structuredClone` function for each new component
-	 * of this type, and assigned to the new component's data. */
-	initialData?: T;
-}
+const ExampleWorld = createWorldDefinition()
+	.withComponent<{
+		position: { x: number, y: number },
+	}>()
+	.withComponent<{
+		velocity: { x: number, y: number },
+	}>();
+	.withEntity({
+		data: {
+			position: { x: 0, y: 0 },
+			velocity: { x: 0, y: 0 },
+		},
+	})
+	.withSystem({
+		ready(systems: SystemManager) {
+			window.addEventListener('keydown', e => {
+				systems.emit('user-input', { code: e.code, value: 'down' });
+			});
+			window.addEventListener('keydown', e => {
+				systems.emit('user-input', { code: e.code, value: 'up' });
+			});
+		},
+		handle(event, controller) {
+			if (event.type !== 'user-input') {
+				return;
+			}
+			const entitites = controller.entitites.queryTypes(['velocity']);
+			if (event.payload.value === 'down') {
+				switch (event.payload.code) {
+					case 'ArrowRight':
+						entitites.forEach(entity => entity.velocity = { x: 1, y: 0 });
+						break;
+					case 'ArrowDown':
+						entitites.forEach(entity => entity.velocity = { x: 0, y: 1 });
+						break;
+					case 'ArrowLeft':
+						entitites.forEach(entity => entity.velocity = { x: -1, y: 0 });
+						break;
+					case 'ArrowUp':
+						entitites.forEach(entity => entity.velocity = { x: 0, y: -1 });
+						break;
+					default:
+						return;
+				}
+			}
+			if (event.payload.value === 'up') {
+				entitites.forEach(entity => entity.velocity = { x: 0, y: 0 });
+			}
+			controller.handled();
+		}
+	})
+	.use(FrameUpdatePlugin) // This plugin emits the 'update' event every frame (this is not a default in `play-state`)
+	.withSystem({
+		handle(event, controller) {
+			if (event.type !== 'update') {
+				return
+			}
+			const entitites = controller.entitites.queryTypes(['position', 'velocity']);
+			const PIXELS_PER_SECOND = 50;
+			for (const entity of entitites) {
+				entity.position.x += entity.velocity.x * PIXELS_PER_SECOND * event.payload.delta;
+				entity.position.y += entity.velocity.y * PIXELS_PER_SECOND * event.payload.delta;
+			}
+			controller.handled();
+		},
+	})
+	.withView({
+		name: 'hero-position',
+		selector(entitites: EntityManager): Entity|undefined {
+			return entitites.queryTypes(['position'])[0];
+		},
+	});
 
-interface EntityCreationCommand {
-	/** Unique identifier of this entity instance. If not provided, one will be
-	 * automatically generated and assigned to this entity. */
-	id?: string;
-	/** Initial components of this entity, and optional initial data. */
-	components: ComponentCreationCommand[];
-}
+const world = ExampleWorld.instantiate();
 
-type ComponentCreationCommand = string | {
-	type: string;
-	data?: unknown;
-};
-
-interface Entity {
-	id: string;
-	data: Record</*componentType*/ string, unknown>;
-}
-
-interface IndexDefinition {
-	/* The name of the index. It should be unique. */
-	name: string;
-	/** Determines the component types to which this index applies. */
-	componentTypes: string[];
-	/** Determines this index applies to the given some component data. The `data`
-	 * argument is guaranteed to contain the components specified in the
-	 * `componentTypes` property. */
-	grouper(data: Record<string, unknown>): string;
-}
-
-/** A plugin is simply a function that receives the world and can call methods to
- * add stuff to it. // TODO There should be mechanisms to prevent naming conflicts
- * (e.g. component types, index types, system names, index names, etc.) */
-interface PluginDefinition {
-	(world: WorldDefinition): void;
-}
-
-interface ViewDefinition {
-	/** Unique idenfitier of the view. */
-	name: string;
-	/** Aggregator function that builds the view data. */
-	selector: (em: EntityManager) => unknown;
-}
-
-interface System {
-	/** Unique identifier of the system. */
-	name: string;
-	/** Human-readable short description of the system,
-	 * only used by debugging tools. */
-	getDisplayName?(): string; // For debugging purposes
-	/** Callback function called once during world instantiation. */
-	init?(wd: WorldData, em: EntityManager): void|Promise<void>;
-	/** Callback function called once after all systems have been initialized.
-	 * Systems can use this callback to start sending events to each other before
-	 * the initialization routine returns control to the client. */
-	ready?(sm: SystemManager, em: EntityManager): void|Promise<void>;
-	/** Callback function to handle events emitted by other systems. */
-	handle(controller: SystemDispatchController): void|Promise<void>;
-}
-
-interface WorldData {
-	/** Data argument provided by the client at world creation. */
-	params: Record<string, unknown>;
-}
-
-interface SystemManager {
-	#systems: System[];
-	dispatchEvent(eventType: string, payload?: unknown): void;
-}
-
-interface EntityManager {
-	#entityIndex: Map</*id:*/ string, Entity>;
-	#entityGroups: EntityGroup[];
-	#componentDefinitions: Map</*type:*/ string, ComponentDefinition>;
-	#indexes: Map</*name:*/ string, IndexData>;
-	addEntity(definition: EntityCreationCommand): Entity;
-	deleteEntity(entityId: string): void;
-	addComponent(entityId: string, type: string, data?: unknown): Entity;
-	removeComponent(id: string): void;
-	createIndex(definition: IndexDefinition): void;
-	queryId(id: string): Entity|undefined;
-	/** Search for all entities that have all of the specified components.
-	 * // TODO Instead of an array of strings, could get a mongodb-like query
-	 * object describing Set-based conditions to match against entitiy groups.
-	 * Example: The following query gets entitites that have a 'position'
-	 * component, and either have the combination of 'HP' and 'AC' components,
-	 * or have the 'dexterity-saving-throw' component.
-	 * `{ $has: ['position'] $or: [{ $has: ['HP', 'AC'] }, { $has: ['dexterity-saving-throw'] }] }`
-	 */
-	queryTypes(...componentTypes: string[]): Entity[];
-	/** Gets all the elements that have been grouped into the given key of the
-	 * specified index. */
-	queryIndex(indexName: string, key: string): Set<Entity>;
-}
-
-interface EntityGroup {
-	/** A set of component types that describe the combination of components
-	 * that entities in this group have. */
-	componenTypes: Set<string>;
-	/** A list of entities, all with the same combination of component types. */
-	entities: Entity[]; // TODO Benchmark with Set<Entity> instead of array
-}
-
-interface IndexData extends IndexDefinition {
-	entities: Map<string, Set<Entity>>;
-}
-
-interface SystemDispatchController {
-	/** The event being handled by this controller. */
-	event: SystemEvent;
-	/** The world's EntityManager instance. The system can use it to query
-	 * existing entity data. */
-	entities: EntityManager;
-	/** Signals that the event has been handled successfully, and optionally
-	 * provide resulting data that can be read by the emitter system. */
-	success(data?: unknown): void;
-	/** Signals that the event has been handled, but the resulting activity
-	 * has failed. Optionally provides an error object that describes the
-	 * cause of the failure. */
-	failure(error?: Error): void;
-	/** Creates a new event with the same type as the event currently being
-	 * handled, and signals that the new event should be dispatched to subsequent
-	 * systems in the handle pipeline instead of the current event.*/
-	transform(payload: JSONValue): void;
-	/** Dispatch a new event, but the resolution of the new event is ignored. This
-	 * means if success() or failure() is not called during the current event
-	 * handling, subsequent systems in the pipeline will still be called after
-	 * this handler returns control, though the new event is handled first.*/
-	stack(eventType: string, payload: JSONValue): void;
-	/** Dispatch a new event and signals that the current event is handled by the
-	 * resolution of the new event. This means this event handles as success if
-	 * the new event succeeds, and as failure if the new event fails. */
-	replace(eventType: string, payload: JSONValue): void;
-	/** Dispatch a new event, but queues it at the bottom of the current event,
-	 * handling stack, so that it is only handled later. */
-	queue(eventType: string, payload: JSONValue): void;
-	/** Dispatch a new event and waits for its resolution. The returned promise
-	 * resolves with the success data of the new event if it's handled
-	 * successfully, or rejects with the error of the new event if it fails. */
-	request<T>(eventType: string, payload: JSONValue): Promise<T>;
-	/** Logs debug information to the system. */
-	debug(...info: unknown): void;
-}
-
-interface SystemEvent {
-	/** Unique identifier of this event instance. */
-	id: string;
-	/** Identifier of the type of event. This determines the shape of the event's
-	 * payload. */
-	type: string;
-	/** Moment in time when the event was created. This is a milisecond-based
-	 * Unix timestamp. */
-	timestampMs: number;
-	/** Event data. Set to `null` when there is no data to be transmitted. */
-	payload: JSONValue;
-	/** If this event was generated during the handling of another event, then
-	 * this property points to that event. */
-	parent?: SystemEvent;
-}
-
-//interface SystemEventResolution {
-//	event: SystemEvent;
-//	result: Result<unknown>;
-// //	resolution: Resolution;
-// //	success: Resolution extends 'success' ? true : false;
-// //	failure: Resolution extends 'failure' ? true : false;
-// //	result?: Resolution extends 'success' ? unknown : undefined;
-// //	error?: Resolution extends 'failure' ? Error : undefined;
-//}
-```
-
-```js
-const instance = MyWorld.instantiate({ some: 'parameters' });
-
-// Events dispatched before the world is ready will be queued and automatically
-// delivered after the world becomes ready.
-instance.dispatchEvent('eventType', { some: 'data' });
-
-// The 'ready' event is emitted after all systems finish initializing.
-instance.signals.on('ready', () => console.log('Listening to events.'));
-instance.signals.on('event', e => console.log('Event received:', e));
-instance.signals.on('settled', e => console.log('The event queue has been emptied.'));
-instance.signals.on('event', e => e.type === 'update' && console.log('Update tick:', { now: e.payload.now, delta: e.payload.delta, fps: e.payload.fps }));
-```
-
-```ts
-// A player client would send this event to the rules engine.
-// A ClientCommandSystem would capture this event, interpret it, and
-// dispatch a ThrowEvent.
-interface UserCommand extends SystemEvent {
-	type: 'command';
-	payload: {
-		action: 'throw';
-		objectId: string;
-		method?: string;
-		targetPosition: WorldPosition;
-	};
-}
-
-// A ThrowSystem would receive the ThrowEvent and update the game world
-// accordingly.
-interface ThrowEvent extends SystemEvent {
-	type: 'throw';
-	payload: {
-		/** Who is throwing. */
-		actorId: string;
-		/** What is being thrown. **/
-		subjectIds: string[];
-		/** How is it being thrown.
-		 * `launch` a deliberate throw to hit with precision; used to throw a spear
-		 *   or a dart at a tareget.
-		 * `hurl` a forceful throw; used to throw a rock or brick; a dart would
-		 *   spin and miss the target.
-		 * `lob` a soft, high-arc, precise throw; always lands in the intended
-		 *   position.
-		 * `toss` throw lightly, easily, or casually; don't go far; deal little
-		 *   to no damage.
-		 */
-		method: 'throw'|'hurl'|'toss'|'drop'|'fling'|'lob';
-		/** Where is it being thrown. */
-		targetPosition: WorldPosition;
-	};
-}
+world.views.subscribe('hero-position', (hero: Entity|undefined) => {
+	if (hero) {
+		console.log("The hero's position changed:", hero.position);
+	} else {
+		console.log('The hero vanished :(');
+	}
+});
 ```
 
 ## Future Features
