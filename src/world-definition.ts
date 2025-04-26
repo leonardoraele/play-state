@@ -1,7 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { World } from './world.js';
 import { SubEntityOf } from './types/entity.js';
-import { CreateSystemFunction } from './types/system.js';
+import type { CreateSystemFunction } from './types/system.ts';
 import { View } from './types/view.js';
 
 export class WorldDefinition<
@@ -18,24 +18,20 @@ export class WorldDefinition<
 		return this as any;
 	}
 
-	withComponent<AdditionalComponentsType extends Record<string, unknown>>(
+	withComponents<AdditionalComponentsType extends Record<string, unknown>>(
 	): WorldDefinition<ParamsType, ComponentsType & AdditionalComponentsType> {
 		return this as any;
 	}
 
-	withEntity(
-		entity: Omit<SubEntityOf<ComponentsType>, 'id'> & { id?: string },
-	): this {
-		this.entitites.push({
-			...entity,
-			id: entity.id ?? uuid(),
-		});
+	withEntity(id: string, data: Partial<ComponentsType>): this;
+	withEntity(data: Partial<ComponentsType>): this;
+	withEntity(...args: any[]): this {
+		const [id, data]: [string, Partial<ComponentsType>] = args.length === 1 ? [uuid(), args[0]] : [args[0], args[1]];
+		this.entitites.push({ id, data } as SubEntityOf<ComponentsType>);
 		return this;
 	}
 
-	withSystem(
-		system: CreateSystemFunction<ParamsType, ComponentsType>,
-	): this {
+	withSystem(system: CreateSystemFunction<ParamsType, ComponentsType>): this {
 		this.systems.push(system);
 		return this;
 	}

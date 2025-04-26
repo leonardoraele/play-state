@@ -1,7 +1,7 @@
 import type { WorldDefinition } from '../world-definition.ts';
 
 export const FrameUpdatePlugin = (worldBuilder: WorldDefinition) =>
-	worldBuilder.withComponent<{
+	worldBuilder.withComponents<{
 			frameData: {
 				frameStart: number,
 				frameCount: number,

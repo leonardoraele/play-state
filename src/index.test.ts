@@ -1,33 +1,35 @@
 import { beginWorldDefinition, FrameUpdatePlugin } from './index.js';
 import { SystemEvent } from './types/system.js';
-import { WorldDefinition } from './world-definition.js';
 
 const ExampleWorld = beginWorldDefinition()
 	.withParameters<{
 		seed: string,
 	}>()
-	.withComponent<{
+	.withComponents<{
 		position: { x: number, y: number },
-	}>()
-	.withComponent<{
 		velocity: { x: number, y: number },
 	}>()
 	.withEntity({
-		data: {
-			position: { x: 0, y: 0 },
-			velocity: { x: 0, y: 0 },
-		},
+		position: { x: 0, y: 0 },
+		velocity: { x: 0, y: 0 },
 	})
+	.withSystem(() => ({
+		name: 'input-listener',
+		ready(systems) {
+			if (typeof window === 'undefined') {
+				console.warn('Input listener is not available in this environment.');
+				return;
+			}
+			window.addEventListener('keydown', e => systems.dispatchEvent('input', { code: e.code, value: 'down' }));
+			window.addEventListener('keydown', e => systems.dispatchEvent('input', { code: e.code, value: 'up' }));
+		},
+	}))
 	.withSystem(entityStore => {
 		function isInputEvent(event: SystemEvent): event is SystemEvent<'input', { code: string, value: string }> {
 			return event.type === 'input';
 		}
 		return {
 			name: 'input-handler',
-			ready(systems) {
-				window.addEventListener('keydown', e => systems.dispatchEvent('input', { code: e.code, value: 'down' }));
-				window.addEventListener('keydown', e => systems.dispatchEvent('input', { code: e.code, value: 'up' }));
-			},
 			handle(event) {
 				if (!isInputEvent(event)) {
 					return;
@@ -88,10 +90,14 @@ const ExampleWorld = beginWorldDefinition()
 
 const world = ExampleWorld.instantiate({ seed: 'example' });
 
-world.views.subscribe('hero-position', hero => {
-	if (hero) {
-		console.log("The hero's position changed:", hero.data.position);
-	} else {
-		console.log('The hero vanished :(');
-	}
+world.signals.on('ready', () => {
+	world.views.subscribe('hero-position', hero => {
+		if (hero) {
+			console.log("The hero's position changed:", hero.data.position);
+		} else {
+			console.log('The hero vanished :(');
+		}
+	});
 });
+
+world.signals.on('error', console.error);

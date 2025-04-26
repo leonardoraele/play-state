@@ -1,11 +1,10 @@
 import type { EntityManager } from '../entity-manager.js';
 import type { SystemManager } from '../system-manager.js';
 import type { WorldSettings } from './world.ts';
-import type * as JSON from 'ts-typed-json';
 
 export type CreateSystemFunction<
 		ParamsType extends Record<string, unknown> = Record<string, unknown>,
-		ComponentsType extends Record<string, unknown> = Record<string, unknown>
+		ComponentsType extends Record<string, unknown> = Record<string, unknown>,
 	>
 	= (em: EntityManager<ComponentsType>, ws: WorldSettings<ParamsType>) => System|Promise<System>;
 
@@ -16,7 +15,7 @@ export interface System {
 	handle?(event: SystemEvent): void;
 }
 
-export interface SystemEvent<TypeName extends string = string, PayloadType extends JSON.Value = JSON.Value> {
+export interface SystemEvent<TypeName extends string = string, PayloadType = unknown> {
 	/** Unique identifier of this event instance. */
 	id: string;
 	/** Identifier of the type of event. This determines the shape of the event's

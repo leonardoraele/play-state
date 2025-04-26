@@ -9,7 +9,7 @@ export interface SubEntityOf<ComponentsType extends Record<string, unknown>, Typ
 	id: string;
 	data: {
 		[key in keyof ComponentsType]: key extends TypeUnion ? ComponentsType[key]
-			: TypeUnion extends '' ? ComponentsType[key]|undefined
-			: undefined;
+			: TypeUnion extends '' ? Partial<ComponentsType>[key]
+			: never;
 	};
 }
