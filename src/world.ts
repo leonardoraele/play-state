@@ -1,7 +1,7 @@
 import { EntityManager, ReadonlyEntityManager } from './entity-manager.js';
 import { ReadonlySystemManager, SystemManager } from './system-manager.js';
 import { WorldSettings } from './types/world.js';
-import { ViewManager } from './view-manager.js';
+import { ReadonlyViewManager, ViewManager } from './view-manager.js';
 import { WorldDefinition } from './world-definition.js';
 import { SignalController } from 'signal-controller';
 
@@ -17,7 +17,7 @@ export class World<
 		Object.freeze(params);
 		this.settings = { params };
 		this.#entities = new EntityManager();
-		this.views = new ViewManager(definition.views, this.#entities, this.settings);
+		this.#views = new ViewManager(definition.views, this.#entities, this.settings);
 		this.#initialize(definition);
 	}
 
@@ -27,19 +27,23 @@ export class World<
 	}>();
 	#entities: EntityManager<ComponentsType>;
 	#systems: SystemManager|undefined;
+	#views: ViewManager<ParamsType, ComponentsType, ViewsType>;
 	readonly settings: WorldSettings<ParamsType>;
 	readonly signals = this.#controller.signal;
-	readonly views: ViewManager<ParamsType, ComponentsType, ViewsType>;
 
-	get entities(): ReadonlyEntityManager {
+	get entities(): ReadonlyEntityManager<ComponentsType> {
 		return this.#entities;
 	}
 
-	get systems(): ReadonlySystemManager {
+	get systems(): SystemManager {
 		if (!this.#systems) {
 			throw new Error('Failed to read `World.systems` property. Cause: World is not ready yet. You should wait for the `ready` event before accessing this property.');
 		}
 		return this.#systems;
+	}
+
+	get views(): ReadonlyViewManager<ParamsType, ComponentsType, ViewsType> {
+		return this.#views;
 	}
 
 	async #initialize(definition: WorldDefinition<ParamsType, ComponentsType>) {

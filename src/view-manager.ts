@@ -76,3 +76,9 @@ export class ViewManager<
 		}
 	}
 }
+
+export type ReadonlyViewManager<
+	ParamsType extends Record<string, unknown> = Record<string, unknown>,
+	ComponentsType extends Record<string, unknown> = Record<string, unknown>,
+	ViewsType extends Record<string, unknown> = Record<string, unknown>,
+> = Pick<ViewManager<ParamsType, ComponentsType, ViewsType>, 'get'|'subscribe'|'unsubscribe'>;

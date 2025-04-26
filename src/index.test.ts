@@ -17,7 +17,7 @@ const ExampleWorld = beginWorldDefinition()
 		name: 'input-listener',
 		ready(systems) {
 			if (typeof window === 'undefined') {
-				console.warn('Input listener is not available in this environment.');
+				console.warn('⚠ Input events are not available in this environment.');
 				return;
 			}
 			window.addEventListener('keydown', e => systems.dispatchEvent('input', { code: e.code, value: 'down' }));
@@ -30,7 +30,7 @@ const ExampleWorld = beginWorldDefinition()
 		}
 		return {
 			name: 'input-handler',
-			handle(event) {
+			handle(event, controller) {
 				if (!isInputEvent(event)) {
 					return;
 				}
@@ -52,9 +52,11 @@ const ExampleWorld = beginWorldDefinition()
 						default:
 							return;
 					}
+					controller.handled();
 				}
 				if (event.payload.value === 'up') {
 					entitites.forEach(entity => entity.data.velocity = { x: 0, y: 0 });
+					controller.handled();
 				}
 			},
 		};
@@ -63,7 +65,7 @@ const ExampleWorld = beginWorldDefinition()
 	.withSystem(entityStore => {
 		return {
 			name: 'movement-handler',
-			handle(event) {
+			handle(event, controller) {
 				if (event.type !== 'update'
 					|| typeof event.payload !== 'object'
 					|| event.payload === null
@@ -78,6 +80,7 @@ const ExampleWorld = beginWorldDefinition()
 					entity.data.position.x += entity.data.velocity.x * PIXELS_PER_SECOND * event.payload.delta;
 					entity.data.position.y += entity.data.velocity.y * PIXELS_PER_SECOND * event.payload.delta;
 				}
+				controller.handled();
 			},
 		};
 	})
@@ -91,13 +94,8 @@ const ExampleWorld = beginWorldDefinition()
 const world = ExampleWorld.instantiate({ seed: 'example' });
 
 world.signals.on('ready', () => {
-	world.views.subscribe('hero-position', hero => {
-		if (hero) {
-			console.log("The hero's position changed:", hero.data.position);
-		} else {
-			console.log('The hero vanished :(');
-		}
-	});
+	console.log('✅ World is ready!');
+	world.systems.signals.on('event', (event, result) => console.log('Event:', { event, result }));
 });
 
 world.signals.on('error', console.error);

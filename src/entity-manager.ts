@@ -84,9 +84,10 @@ class EntityGroupCollection {
 	}
 }
 
-export type ReadonlyEntityManager = Pick<EntityManager, 'queryId'|'queryTypes'>;
-
 interface EntityGroup {
 	componentTypes: Set<string>;
 	entities: Entity[];
 }
+
+export type ReadonlyEntityManager<ComponentsType extends Record<string, unknown> = Record<string, unknown>>
+	= Pick<EntityManager<ComponentsType>, 'queryId'|'queryTypes'>;
