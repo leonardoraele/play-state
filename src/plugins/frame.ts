@@ -1,13 +1,15 @@
 import type { WorldDefinition } from '../world-definition.ts';
 
+export interface FrameData {
+	frameStart: number;
+	frameCount: number;
+	delta: number;
+	fps: number;
+}
+
 export const FrameUpdatePlugin = (worldBuilder: WorldDefinition) =>
 	worldBuilder.withComponents<{
-		frameData: {
-			frameStart: number,
-			frameCount: number,
-			delta: number,
-			fps: number,
-		},
+		frameData: FrameData,
 	}>()
 	.withEntity('#frameData', {
 		frameData: {
@@ -15,10 +17,13 @@ export const FrameUpdatePlugin = (worldBuilder: WorldDefinition) =>
 			frameCount: 0,
 			delta: 0,
 			fps: 0,
-		},
+		} satisfies FrameData,
 	})
+	.withEvents<{
+		update(frameData: FrameData): void,
+	}>()
 	.withSystem(entityStore => {
-		const frameData = entityStore.queryId('#frameData')!.data.frameData!;
+		const frameData: FrameData = entityStore.queryId('#frameData')!.data.frameData!;
 		let fpsCounter = 0;
 		return {
 			name: '#frame',

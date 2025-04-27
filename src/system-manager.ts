@@ -1,19 +1,23 @@
 import { Result } from '@leonardoraele/result';
 import { EntityManager } from './entity-manager.js';
-import type { CreateSystemFunction, System, SystemDispatchController, SystemEvent } from './types/system.ts';
+import type { BaseEventsType, CreateSystemFunction, PayloadType, ResultType, System, SystemDispatchController, SystemEvent } from './types/system.ts';
 import type { WorldSettings } from './types/world.ts';
 import { v4 as uuid } from 'uuid';
 import { SignalController } from 'signal-controller';
 
-export class SystemManager {
+export class SystemManager<
+	EventsType extends BaseEventsType = BaseEventsType,
+> {
 	static async initialize<
 		ParamsType extends Record<string, unknown>,
 		ComponentsType extends Record<string, unknown>,
+		ViewsType extends Record<string, unknown>,
+		EventsType extends BaseEventsType,
 	>(
-		creatorFunctions: CreateSystemFunction<ParamsType, ComponentsType>[],
+		creatorFunctions: CreateSystemFunction<ParamsType, ComponentsType, ViewsType, EventsType>[],
 		entities: EntityManager<ComponentsType>,
 		settings: WorldSettings<ParamsType>,
-	): Promise<SystemManager> {
+	): Promise<SystemManager<EventsType>> {
 		const systems = await Promise.all(creatorFunctions.map(createSystem => createSystem(entities, settings)));
 		const manager = new SystemManager(systems);
 		for (const system of systems) {
@@ -23,20 +27,20 @@ export class SystemManager {
 	}
 
 	constructor(
-		private systems: System[],
+		private systems: System<EventsType>[],
 	) {}
 
-	#queue: SystemEvent[] = [];
+	#queue: SystemEvent<EventsType>[] = [];
 	#controller = new SignalController<{
 		settled(): void;
-		event(event: SystemEvent, result: Result<unknown>): void;
+		event(event: SystemEvent<EventsType>, result: Result<unknown>): void;
 	}>();
 	readonly signals = this.#controller.signal;
 
-	dispatchEvent<EventType extends string>(eventType: EventType): void;
-	dispatchEvent<EventType extends string, PayloadType>(eventType: EventType, payload: PayloadType): void;
-	dispatchEvent<EventType extends string>(eventType: EventType, payload?: unknown): void {
-		const event: SystemEvent<EventType> = {
+	dispatchEvent<TypeName extends keyof EventsType>(eventType: TypeName): void;
+	dispatchEvent<TypeName extends keyof EventsType>(eventType: TypeName, payload: PayloadType<EventsType, TypeName>): void;
+	dispatchEvent<TypeName extends keyof EventsType>(eventType: TypeName, payload?: any): void {
+		const event: SystemEvent<EventsType, TypeName> = {
 			id: uuid(),
 			type: eventType,
 			timestampMs: Date.now(),
@@ -58,20 +62,23 @@ export class SystemManager {
 
 		while (stack.length > 0) {
 			let event = stack.pop()!;
-			let result = processEvent.call(this, event);
+			let result: Result<unknown> = processEvent.call(this, event);
 			result.rescue(console.error);
 			this.#controller.emit('event', event, result);
 		}
 
 		this.#controller.emit('settled');
 
-		function processEvent(this: SystemManager, event: SystemEvent): Result<unknown> {
-			let result: Result<unknown>|undefined;
-			const controller: SystemDispatchController = {
-				set(result: Result<unknown>) {
+		function processEvent<TypeName extends keyof EventsType>(
+			this: SystemManager<EventsType>,
+			event: SystemEvent<EventsType, TypeName>
+		): Result<ResultType<EventsType, TypeName>> {
+			let result: Result<ResultType<EventsType, TypeName>>|undefined;
+			const controller: SystemDispatchController<EventsType, TypeName> = {
+				set(result) {
 					result = result;
 				},
-				handled(data?: unknown) {
+				handled(data) {
 					result = Result.ok(data);
 				},
 				failed(error) {
