@@ -29,7 +29,7 @@ export interface System<
 	readonly name: string;
 	getDisplayName?(): string;
 	ready?(systems: SystemManager<EventsType>): void;
-	handle?(event: SystemEvent<EventsType>, controller: SystemDispatchController<EventsType>): void;
+	handle?(event: SystemEvent<EventsType>, controller: SystemEventController<EventsType>): void;
 }
 
 export interface SystemEvent<
@@ -51,10 +51,11 @@ export interface SystemEvent<
 	parent?: SystemEvent<EventsType>;
 }
 
-export interface SystemDispatchController<
+export interface SystemEventController<
 	EventsType extends BaseEventsType = BaseEventsType,
 	TypeName extends keyof EventsType = keyof EventsType,
 > {
+	type: TypeName;
 	/** Signals that the event has been handled and sets the result. */
 	set(result: Result<ResultType<EventsType, TypeName>>): void;
 	/** Signals that the event has been handled successfully, and optionally

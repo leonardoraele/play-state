@@ -1,5 +1,4 @@
 import { beginWorldDefinition, FrameUpdatePlugin } from './index.js';
-import { SystemEvent } from './types/system.js';
 
 const ExampleWorld = beginWorldDefinition()
 	.withParameters<{
@@ -14,7 +13,7 @@ const ExampleWorld = beginWorldDefinition()
 		velocity: { x: 0, y: 0 },
 	})
 	.withEvents<{
-		input(): void;
+		input(payload: { code: string, value: 'down'|'up' }): void;
 	}>()
 	.withSystem(() => ({
 		name: 'input-listener',
@@ -28,13 +27,10 @@ const ExampleWorld = beginWorldDefinition()
 		},
 	}))
 	.withSystem(entityStore => {
-		function isInputEvent(event: SystemEvent): event is SystemEvent<'input', { code: string, value: string }> {
-			return event.type === 'input';
-		}
 		return {
 			name: 'input-handler',
 			handle(event, controller) {
-				if (!isInputEvent(event)) {
+				if (event.type !== 'input') {
 					return;
 				}
 				const entitites = entityStore.queryTypes(['velocity']).toArray();
@@ -55,11 +51,11 @@ const ExampleWorld = beginWorldDefinition()
 						default:
 							return;
 					}
-					controller.handled();
+					controller.handled(null);
 				}
 				if (event.payload.value === 'up') {
 					entitites.forEach(entity => entity.data.velocity = { x: 0, y: 0 });
-					controller.handled();
+					controller.handled(null);
 				}
 			},
 		};
@@ -69,12 +65,7 @@ const ExampleWorld = beginWorldDefinition()
 		return {
 			name: 'movement-handler',
 			handle(event, controller) {
-				if (event.type !== 'update'
-					|| typeof event.payload !== 'object'
-					|| event.payload === null
-					|| !('delta' in event.payload)
-					|| typeof event.payload.delta !== 'number'
-				) {
+				if (event.type !== 'update') {
 					return;
 				}
 				const entitites = entityStore.queryTypes(['position', 'velocity']).toArray();
@@ -83,7 +74,7 @@ const ExampleWorld = beginWorldDefinition()
 					entity.data.position.x += entity.data.velocity.x * PIXELS_PER_SECOND * event.payload.delta;
 					entity.data.position.y += entity.data.velocity.y * PIXELS_PER_SECOND * event.payload.delta;
 				}
-				controller.handled();
+				controller.handled(null);
 			},
 		};
 	})

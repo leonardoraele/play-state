@@ -1,6 +1,6 @@
 import { Result } from '@leonardoraele/result';
 import { EntityManager } from './entity-manager.js';
-import type { BaseEventsType, CreateSystemFunction, PayloadType, ResultType, System, SystemDispatchController, SystemEvent } from './types/system.ts';
+import type { BaseEventsType, CreateSystemFunction, PayloadType, ResultType, System, SystemEventController, SystemEvent } from './types/system.ts';
 import type { WorldSettings } from './types/world.ts';
 import { v4 as uuid } from 'uuid';
 import { SignalController } from 'signal-controller';
@@ -74,7 +74,7 @@ export class SystemManager<
 			event: SystemEvent<EventsType, TypeName>
 		): Result<ResultType<EventsType, TypeName>> {
 			let result: Result<ResultType<EventsType, TypeName>>|undefined;
-			const controller: SystemDispatchController<EventsType, TypeName> = {
+			const controller: SystemEventController<EventsType, TypeName> = {
 				set(result) {
 					result = result;
 				},

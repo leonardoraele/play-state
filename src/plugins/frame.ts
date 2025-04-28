@@ -7,7 +7,7 @@ export interface FrameData {
 	fps: number;
 }
 
-export const FrameUpdatePlugin = (worldBuilder: WorldDefinition) =>
+export const FrameUpdatePlugin = (worldBuilder: WorldDefinition<{}, {}, {}, {}>) =>
 	worldBuilder.withComponents<{
 		frameData: FrameData,
 	}>()

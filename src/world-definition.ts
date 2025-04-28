@@ -50,17 +50,17 @@ export class WorldDefinition<
 	}
 
 	use<
-		NewParamsType extends Record<string, unknown>,
-		NewComponentsType extends Record<string, unknown>,
-		NewViewsType extends Record<string, unknown>,
-		NewEventsType extends BaseEventsType,
+		ExtraParamsType extends Record<string, unknown>,
+		ExtraComponentsType extends Record<string, unknown>,
+		ExtraViewsType extends Record<string, unknown>,
+		ExtraEventsType extends Record<string, any>,
 	>(
-		plugin: (definition: WorldDefinition) => WorldDefinition<NewParamsType, NewComponentsType, NewViewsType, NewEventsType>,
+		plugin: (definition: WorldDefinition<{}, {}, {}, {}>) => WorldDefinition<ExtraParamsType, ExtraComponentsType, ExtraViewsType, ExtraEventsType>
 	): WorldDefinition<
-		ParamsType & NewParamsType,
-		ComponentsType & NewComponentsType,
-		ViewsType & NewViewsType,
-		EventsType & NewEventsType
+		ParamsType & ExtraParamsType,
+		ComponentsType & ExtraComponentsType,
+		ViewsType & ExtraViewsType,
+		EventsType & ExtraEventsType
 	> {
 		return plugin(this as any) as any;
 	}
@@ -70,6 +70,6 @@ export class WorldDefinition<
 	}
 }
 
-export function beginWorldDefinition(): WorldDefinition<{}, {}> {
+export function beginWorldDefinition(): WorldDefinition<{}, {}, {}, {}> {
 	return new WorldDefinition();
 }
