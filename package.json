@@ -9,6 +9,9 @@
     "dist"
   ],
   "exports": "./dist/index.js",
+  "imports": {
+    "#package.json": "./package.json"
+  },
   "scripts": {
     "build": "tsc",
     "prebuild": "rimraf dist",
@@ -17,12 +20,30 @@
     "test:unit": "node --import=tsx --test ./src/**/*.test.ts",
     "prepack": "npm run build"
   },
+  "dependencies": {
+    "@leonardoraele/jtd": "^0.1.0",
+    "@leonardoraele/result": "^0.1.5",
+    "@leonardoraele/signals": "file:packages/signals",
+    "extra-iterator": "^0.5.0",
+    "signal-controller": "^0.4.0",
+    "uuid": "^11.1.0"
+  },
+  "peerDependencies": {
+    "debug": "^4.4.0"
+  },
+  "peerDependenciesMeta": {
+    "debug": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@types/debug": "^4.1.12",
     "concurrently": "^9.1.2",
     "rimraf": "^6.0.1",
     "ts-typed-json": "^0.3.2",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
   },
   "keywords": [
     "game",
@@ -39,12 +60,5 @@
     "systems",
     "event",
     "events"
-  ],
-  "dependencies": {
-    "@leonardoraele/jtd": "^0.1.0",
-    "@leonardoraele/result": "^0.1.5",
-    "extra-iterator": "^0.5.0",
-    "signal-controller": "^0.1.1",
-    "uuid": "^11.1.0"
-  }
+  ]
 }

@@ -55,16 +55,15 @@ export interface SystemEventController<
 	EventsType extends BaseEventsType = BaseEventsType,
 	TypeName extends keyof EventsType = keyof EventsType,
 > {
-	type: TypeName;
 	/** Signals that the event has been handled and sets the result. */
 	set(result: Result<ResultType<EventsType, TypeName>>): void;
 	/** Signals that the event has been handled successfully, and optionally
 	 * provide resulting data that can be read by the emitter system. */
-	handled(data: ResultType<EventsType, TypeName>): void;
+	setHandled(data: ResultType<EventsType, TypeName>): void;
 	/** Signals that the event has been handled, but the resulting activity
 	 * has failed. Optionally provides an error object that describes the
 	 * cause of the failure. */
-	failed(error?: Error): void;
+	setFailed(error?: Error): void;
 	/** Creates a new event with the same type as the event currently being
 	 * handled, and signals that the new event should be dispatched to subsequent
 	 * systems in the handle pipeline instead of the current event.*/

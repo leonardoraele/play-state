@@ -2,6 +2,8 @@ import { ExtraIterator } from 'extra-iterator';
 import type { EntityManager } from './entity-manager.ts';
 import type { View } from './types/view.ts';
 import type { WorldSettings } from './types/world.ts';
+import { Computed, Effect } from '@leonardoraele/signals';
+import { views as debug } from './util/debug.js';
 
 interface ViewSubscribeOptions {
 	signal?: AbortSignal;
@@ -28,12 +30,18 @@ export class ViewManager<
 	}
 
 	#views: Record<string, View<ParamsType, ComponentsType>> = {};
-	#listeners: Record<string, ViewListener[]> = {};
-	#cache: Record<string, unknown> = {};
+	#computed: Record<string, Computed<any>> = {};
+	#effects = new Map<ViewListener, Effect>();
 
 	get<NameType extends keyof ViewsType>(name: NameType): ViewsType[NameType] {
-		return this.#cache[name as string]
-			= this.#views[name as string]!.selector(this.entities, this.settings) as ViewsType[NameType];
+		return this.#getOrInitComputed(name).value;
+	}
+
+	#getOrInitComputed<NameType extends keyof ViewsType>(name: NameType): Computed<ViewsType[NameType]> {
+		return this.#computed[name as string] ??= new Computed(() => {
+			debug('view-computed', 'Computing view...', { viewName: name });
+			return this.#views[name as string]!.selector(this.entities, this.settings);
+		});
 	}
 
 	subscribe<NameType extends keyof ViewsType>(name: NameType, callback: ViewListener<ViewsType[NameType]>): void;
@@ -41,37 +49,28 @@ export class ViewManager<
 	subscribe(name: string, ...args: any): void {
 		const [options, callback]: [ViewSubscribeOptions|undefined, ViewListener]
 			= typeof args[0] === 'function' ? [undefined, args[0]] : args;
-		this.#listeners[name] ??= [];
-		this.#listeners[name].push(callback);
-		options?.signal?.addEventListener('abort', () => this.unsubscribe(name, callback));
-		if (options?.lazy !== true) {
-			callback(this.#cache[name] = this.#views[name]!.selector(this.entities, this.settings));
-		}
+		const computed = this.#getOrInitComputed(name);
+		const effect = new Effect(() => {
+			const { value } = computed;
+			debug('callback', 'Calling a callback...', { viewName: name });
+			callback(value);
+		}, { lazy: options?.lazy });
+		this.#effects.set(callback, effect);
+		options?.signal?.addEventListener('abort', () => this.unsubscribe(callback));
 	}
 
-	unsubscribe(name: string, callback: ViewListener): void {
-		this.#listeners[name] = (this.#listeners[name] ?? []).filter(listener => listener !== callback);
-		if (this.#listeners[name].length === 0) {
-			delete this.#listeners[name];
-		}
+	unsubscribe(callback: ViewListener): void {
+		this.#effects.get(callback)?.dispose();
+		this.#effects.delete(callback);
 	}
 
-	update() {
-		for (const name in this.#views) {
+	emitUpdates() {
+		debug('emit-updates', 'Reevaluating dirty effects...');
+		for (const effect of this.#effects.values()) {
 			try {
-				const oldValue = this.#cache[name];
-				const newValue = this.#cache[name] = this.#views[name]!.selector(this.entities, this.settings);
-				if (oldValue !== newValue) {
-					for (const listener of this.#listeners[name] ?? []) {
-						try {
-							listener(newValue);
-						} catch (error) {
-							console.error('An error ocurred during the execution of a view\'s listener.', 'View:', name, 'Error:', error);
-						}
-					}
-				}
-			} catch (error) {
-				console.error('An error ocurred while processing a view. Error:', error);
+				effect.reevaluate();
+			} catch (cause) {
+				console.error(cause);
 			}
 		}
 	}
@@ -81,4 +80,4 @@ export type ReadonlyViewManager<
 	ParamsType extends Record<string, unknown> = Record<string, unknown>,
 	ComponentsType extends Record<string, unknown> = Record<string, unknown>,
 	ViewsType extends Record<string, unknown> = Record<string, unknown>,
-> = Pick<ViewManager<ParamsType, ComponentsType, ViewsType>, 'get'|'subscribe'|'unsubscribe'>;
+> = Pick<ViewManager<ParamsType, ComponentsType, ViewsType>, 'get'|'subscribe'>;

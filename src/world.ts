@@ -51,6 +51,7 @@ export class World<
 		definition.entitites.forEach(entity => this.#entities.addEntity(entity));
 		try {
 			this.#systems = await SystemManager.initialize(definition.systems, this.#entities, this.settings);
+			this.#systems.signals.on('settled', () => this.#views.emitUpdates());
 			this.#controller.emit('ready', this);
 		} catch (cause) {
 			this.#controller.emit('error', cause instanceof Error ? cause : new Error('Failed to initialize World. Cause: One or more systems failed to initialize.', { cause }));

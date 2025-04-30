@@ -1,4 +1,5 @@
 import { beginWorldDefinition, FrameUpdatePlugin } from './index.js';
+import { BaseEventsType, SystemEventController } from './types/system.js';
 
 const ExampleWorld = beginWorldDefinition()
 	.withParameters<{
@@ -14,6 +15,7 @@ const ExampleWorld = beginWorldDefinition()
 	})
 	.withEvents<{
 		input(payload: { code: string, value: 'down'|'up' }): void;
+		example(payload: undefined): void;
 	}>()
 	.withSystem(() => ({
 		name: 'input-listener',
@@ -29,13 +31,13 @@ const ExampleWorld = beginWorldDefinition()
 	.withSystem(entityStore => {
 		return {
 			name: 'input-handler',
-			handle(event, controller) {
-				if (event.type !== 'input') {
+			handle(controller) {
+				if (controller.type !== 'input') {
 					return;
 				}
 				const entitites = entityStore.queryTypes(['velocity']).toArray();
-				if (event.payload.value === 'down') {
-					switch (event.payload.code) {
+				if (controller.event.payload.value === 'down') {
+					switch (controller.event.payload.code) {
 						case 'ArrowRight':
 							entitites.forEach(entity => entity.data.velocity = { x: 1, y: 0 });
 							break;
@@ -74,7 +76,7 @@ const ExampleWorld = beginWorldDefinition()
 					entity.data.position.x += entity.data.velocity.x * PIXELS_PER_SECOND * event.payload.delta;
 					entity.data.position.y += entity.data.velocity.y * PIXELS_PER_SECOND * event.payload.delta;
 				}
-				controller.handled(null);
+				controller.setHandled(null);
 			},
 		};
 	})

@@ -4,6 +4,7 @@ import type { BaseEventsType, CreateSystemFunction, PayloadType, ResultType, Sys
 import type { WorldSettings } from './types/world.ts';
 import { v4 as uuid } from 'uuid';
 import { SignalController } from 'signal-controller';
+import { systems as debug } from './util/debug.js';
 
 export class SystemManager<
 	EventsType extends BaseEventsType = BaseEventsType,
@@ -18,11 +19,14 @@ export class SystemManager<
 		entities: EntityManager<ComponentsType>,
 		settings: WorldSettings<ParamsType>,
 	): Promise<SystemManager<EventsType>> {
-		const systems = await Promise.all(creatorFunctions.map(createSystem => createSystem(entities, settings)));
+		debug('initialize', '⏳ Initializing systems...')
+		const systems = await Promise.all(creatorFunctions.map(async createSystem => createSystem(entities, settings)));
 		const manager = new SystemManager(systems);
+		debug('initialize', '⏳ Calling `ready()` on systems...');
 		for (const system of systems) {
 			system.ready?.(manager);
 		}
+		debug('initialize', '✅ Initialization complete. All systems are ready.');
 		return manager;
 	}
 
@@ -33,7 +37,7 @@ export class SystemManager<
 	#queue: SystemEvent<EventsType>[] = [];
 	#controller = new SignalController<{
 		settled(): void;
-		event(event: SystemEvent<EventsType>, result: Result<unknown>): void;
+		event(event: SystemEvent<EventsType>, result: Result<unknown>|undefined): void;
 	}>();
 	readonly signals = this.#controller.signal;
 
@@ -46,6 +50,7 @@ export class SystemManager<
 			timestampMs: Date.now(),
 			payload,
 		};
+		debug('event-queued', 'Event added to queue.', event);
 		this.#queue.push(event);
 		if (this.#queue.length === 1) {
 			queueMicrotask(() => this.#processQueue());
@@ -53,86 +58,87 @@ export class SystemManager<
 	}
 
 	#processQueue(): void {
-		// When the system starts the event delivery routine (now), the event queue is transformed into a stack. The
-		// queued events will still be handled in FIFO order, since the first event queued will be at the top of the
-		// stack, however, if new events are stacked during the event handling process, they will be prioritized
-		// (stacked on top of existing events).
-		const stack = this.#queue.reverse();
-		this.#queue = [];
-
-		while (stack.length > 0) {
-			let event = stack.pop()!;
-			let result: Result<unknown> = processEvent.call(this, event);
-			result.rescue(console.error);
-			this.#controller.emit('event', event, result);
+		if (this.#queue.length === 0) {
+			debug('process-queue', 'Event queue is empty. No events to process.');
+			return;
 		}
-
-		this.#controller.emit('settled');
-
-		function processEvent<TypeName extends keyof EventsType>(
-			this: SystemManager<EventsType>,
-			event: SystemEvent<EventsType, TypeName>
-		): Result<ResultType<EventsType, TypeName>> {
-			let result: Result<ResultType<EventsType, TypeName>>|undefined;
-			const controller: SystemEventController<EventsType, TypeName> = {
-				set(result) {
-					result = result;
-				},
-				handled(data) {
-					result = Result.ok(data);
-				},
-				failed(error) {
-					result = Result.err(error ?? 'Event handling failure.');
-				},
-				forward(payload) {
-					event = {
-						id: uuid(),
-						type: event.type,
-						timestampMs: Date.now(),
-						payload,
-						parent: event,
-					};
-				},
-				stack: (eventType, payload) => {
-					return processEvent.call(this, {
-						id: uuid(),
-						type: eventType,
-						timestampMs: Date.now(),
-						payload,
-						parent: event,
-					});
-				},
-				defer: (eventType, payload) => {
-					this.#queue.push({
-						id: uuid(),
-						type: eventType,
-						timestampMs: Date.now(),
-						payload,
-						parent: event,
-					});
-				},
-				debug(...info) {
-					console.debug(SystemManager.name, { event }, ...info);
-				},
-			};
-			for (const system of this.systems) {
-				try {
-					system.handle?.(event, controller);
-				} catch (error) {
-					result = Result.err(error instanceof Error ? error : String(error))
-						.mapErr(error => error.causes('An error occured during handling of a system event.').with({
-							system: system.name,
-							event: event.type,
-						}));
-				}
-				if (result) {
-					break;
-				}
+		debug('process-queue', '▶ Starting processing event queue...', `(${this.#queue.length} events in queue.)`);
+		for (let event: SystemEvent<EventsType>|undefined; event = this.#queue.shift();) {
+			debug('process-queue', 'Processing event', event.id, event);
+			const result: Result<unknown> = this.#processEvent(event);
+			if (result.isErr()) {
+				console.error(result.error);
 			}
-			result ??= Result.err('Failed to handle event. Cause: The event has been delivered to all systems and none have handled it.')
-				.mapErr(error => error.with({ eventType: event.type }));
-			return result;
+			debug('process-queue', result.isOk() ? '✔ Event processed successfully.' : '✖ Event processing failed.', { id: event.id, result }, 'Remaining events in queue:', this.#queue.length);
 		}
+		debug('process-queue', '✅ Event queue processed. Systems settled.');
+		this.#controller.emit('settled');
+	}
+
+	/** Runs an event through each systems until one of them handles it, then returns the result. */
+	#processEvent<TypeName extends keyof EventsType>(
+		event: SystemEvent<EventsType, TypeName>
+	): Result<ResultType<EventsType, TypeName>> {
+		let result: Result<ResultType<EventsType, TypeName>>|undefined;
+		const controller: SystemEventController<EventsType, TypeName> = {
+			set(result) {
+				result = result;
+			},
+			setHandled(data) {
+				result = Result.ok(data);
+			},
+			setFailed(error) {
+				result = Result.err(error ?? 'Event handling failure.');
+			},
+			forward(payload) {
+				event = {
+					id: uuid(),
+					type: event.type,
+					timestampMs: Date.now(),
+					payload,
+					parent: event,
+				};
+			},
+			stack: (eventType, payload) => {
+				return this.#processEvent({
+					id: uuid(),
+					type: eventType,
+					timestampMs: Date.now(),
+					payload,
+					parent: event,
+				});
+			},
+			defer: (eventType, payload) => {
+				this.#queue.push({
+					id: uuid(),
+					type: eventType,
+					timestampMs: Date.now(),
+					payload,
+					parent: event,
+				});
+			},
+			debug(...info) {
+				debug('handle-debug', event.type, { event }, ...info);
+			},
+		};
+		for (const system of this.systems) {
+			try {
+				system.handle?.(event, controller);
+			} catch (error) {
+				result = Result.err(error instanceof Error ? error : String(error))
+					.mapErr(error => error.causes('An error occured during handling of a system event.').with({
+						system: system.name,
+						eventType: event.type,
+					}));
+			}
+			if (result) {
+				break;
+			}
+		}
+		this.#controller.emit('event', event, result);
+		result ??= Result.err('Failed to handle event. Cause: The event has been delivered to all systems and none have handled it.')
+			.mapErr(error => error.with({ eventType: event.type }));
+		return result;
 	}
 }
 

@@ -1,28 +1,23 @@
 // import type { ComponentDefinition } from './types/component.ts';
 import { ExtraIterator } from 'extra-iterator';
 import type { Entity, SubEntityOf } from './types/entity.ts';
+import { makeReactive, unwrapReactive } from '@leonardoraele/signals';
+import { entities as debug } from './util/debug.js';
 
 const GROUP_MAX_SIZE = 100;
 
 export class EntityManager<ComponentsType extends Record<string, unknown> = Record<string, unknown>> {
-	// #componentTypes: ComponentDefinition[] = [];
 	#entityIndex = new Map<string, SubEntityOf<ComponentsType>>();
 	#entityGroups = new EntityGroupCollection();
-
-	// get componentTypes(): readonly ComponentDefinition[] {
-	// 	return this.#componentTypes;
-	// }
-
-	// addComponentType(definition: ComponentDefinition): void {
-	// 	this.#componentTypes.push(definition);
-	// }
 
 	addEntity(entity: SubEntityOf<ComponentsType>): void {
 		if (this.#entityIndex.has(entity.id)) {
 			return;
 		}
+		entity.data = makeReactive(entity.data);
 		this.#entityIndex.set(entity.id, entity);
 		this.#entityGroups.addEntity(entity);
+		debug('entity-added', 'Entity added to world: ', entity);
 	}
 
 	removeEntityById(id: string): void {
@@ -34,8 +29,10 @@ export class EntityManager<ComponentsType extends Record<string, unknown> = Reco
 	}
 
 	removeEntity(entity: Entity): void {
+		entity.data = unwrapReactive(entity.data);
 		this.#entityIndex.delete(entity.id);
 		this.#entityGroups.removeEntity(entity);
+		debug('entity-removed', 'Entity removed from the world:', entity);
 	}
 
 	queryId(id: string): SubEntityOf<ComponentsType> | undefined {
