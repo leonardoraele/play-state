@@ -23,7 +23,7 @@
   "dependencies": {
     "@leonardoraele/jtd": "^0.1.0",
     "@leonardoraele/result": "^0.1.5",
-    "@leonardoraele/signals": "file:packages/signals",
+    "@leonardoraele/signals": "file:../signals",
     "extra-iterator": "^0.5.0",
     "signal-controller": "^0.4.0",
     "uuid": "^11.1.0"
