@@ -43,6 +43,7 @@ export class SystemManager<
 
 	dispatchEvent<TypeName extends keyof EventsType>(eventType: TypeName): void;
 	dispatchEvent<TypeName extends keyof EventsType>(eventType: TypeName, payload: PayloadType<EventsType, TypeName>): void;
+	dispatchEvent(eventType: string, payload: unknown): void;
 	dispatchEvent<TypeName extends keyof EventsType>(eventType: TypeName, payload?: any): void {
 		const event: SystemEvent<EventsType, TypeName> = {
 			id: uuid(),

@@ -33,7 +33,9 @@ export class ViewManager<
 	#computed: Record<string, Computed<any>> = {};
 	#effects = new Map<ViewListener, Effect>();
 
-	get<NameType extends keyof ViewsType>(name: NameType): ViewsType[NameType] {
+	get<NameType extends keyof ViewsType>(name: NameType): ViewsType[NameType];
+	get(name: string): unknown;
+	get(name: string): unknown {
 		return this.#getOrInitComputed(name).value;
 	}
 
@@ -46,6 +48,8 @@ export class ViewManager<
 
 	subscribe<NameType extends keyof ViewsType>(name: NameType, callback: ViewListener<ViewsType[NameType]>): void;
 	subscribe<NameType extends keyof ViewsType>(name: NameType, options: ViewSubscribeOptions, callback: ViewListener<ViewsType[NameType]>): void;
+	subscribe(name: string, callback: ViewListener<unknown>): void;
+	subscribe(name: string, options: ViewSubscribeOptions, callback: ViewListener<unknown>): void;
 	subscribe(name: string, ...args: any): void {
 		const [options, callback]: [ViewSubscribeOptions|undefined, ViewListener]
 			= typeof args[0] === 'function' ? [undefined, args[0]] : args;
