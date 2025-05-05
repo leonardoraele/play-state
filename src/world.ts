@@ -1,5 +1,6 @@
 import { EntityManager, ReadonlyEntityManager } from './entity-manager.js';
 import { SystemManager } from './system-manager.js';
+import type { SystemEvent } from './types/system.js';
 import { WorldSettings } from './types/world.js';
 import { ReadonlyViewManager, ViewManager } from './view-manager.js';
 import { WorldDefinition } from './world-definition.js';
@@ -9,10 +10,10 @@ export class World<
 	ParamsType extends Record<string, unknown>,
 	ComponentsType extends Record<string, unknown>,
 	ViewsType extends Record<string, unknown> = Record<string, unknown>,
-	EventsType extends Record<string, (payload: unknown) => unknown> = Record<string, (payload: unknown) => unknown>,
+	EventUnionType extends SystemEvent = never,
 > {
 	constructor(
-		definition: WorldDefinition<ParamsType, ComponentsType, ViewsType, EventsType>,
+		definition: WorldDefinition<ParamsType, ComponentsType, ViewsType, EventUnionType>,
 		public readonly params: ParamsType,
 	) {
 		Object.freeze(params);
@@ -23,11 +24,11 @@ export class World<
 	}
 
 	#controller = new SignalController<{
-		ready(world: World<ParamsType, ComponentsType, ViewsType, EventsType>): void;
+		ready(world: World<ParamsType, ComponentsType, ViewsType, EventUnionType>): void;
 		error(error: Error): void;
 	}>();
 	#entities: EntityManager<ComponentsType>;
-	#systems: SystemManager<EventsType>|undefined;
+	#systems: SystemManager<EventUnionType>|undefined;
 	#views: ViewManager<ParamsType, ComponentsType, ViewsType>;
 	readonly settings: WorldSettings<ParamsType>;
 	readonly signals = this.#controller.signal;
@@ -36,7 +37,7 @@ export class World<
 		return this.#entities;
 	}
 
-	get systems(): SystemManager<EventsType> {
+	get systems(): SystemManager<EventUnionType> {
 		if (!this.#systems) {
 			throw new Error('Failed to read `World.systems` property. Cause: World is not ready yet. You should wait for the `ready` event before accessing this property.');
 		}
@@ -47,7 +48,7 @@ export class World<
 		return this.#views;
 	}
 
-	async #initialize(definition: WorldDefinition<ParamsType, ComponentsType, ViewsType, EventsType>): Promise<void> {
+	async #initialize(definition: WorldDefinition<ParamsType, ComponentsType, ViewsType, EventUnionType>): Promise<void> {
 		definition.entitites.forEach(entity => this.#entities.addEntity(entity));
 		try {
 			this.#systems = await SystemManager.initialize(definition.systems, this.#entities, this.settings);

@@ -1,24 +1,24 @@
 import { Result } from '@leonardoraele/result';
 import { EntityManager } from './entity-manager.js';
-import type { BaseEventsType, CreateSystemFunction, PayloadType, ResultType, System, SystemEventController, SystemEvent } from './types/system.ts';
+import type { CreateSystemFunction, System, SystemEventController, SystemEvent } from './types/system.ts';
 import type { WorldSettings } from './types/world.ts';
 import { v4 as uuid } from 'uuid';
 import { SignalController } from 'signal-controller';
 import { systems as debug } from './util/debug.js';
 
 export class SystemManager<
-	EventsType extends BaseEventsType = BaseEventsType,
+	EventUnionType extends SystemEvent = never,
 > {
 	static async initialize<
 		ParamsType extends Record<string, unknown>,
 		ComponentsType extends Record<string, unknown>,
 		ViewsType extends Record<string, unknown>,
-		EventsType extends BaseEventsType,
+		EventUnionType extends SystemEvent,
 	>(
-		creatorFunctions: CreateSystemFunction<ParamsType, ComponentsType, ViewsType, EventsType>[],
+		creatorFunctions: CreateSystemFunction<ParamsType, ComponentsType, ViewsType, EventUnionType>[],
 		entities: EntityManager<ComponentsType>,
 		settings: WorldSettings<ParamsType>,
-	): Promise<SystemManager<EventsType>> {
+	): Promise<SystemManager<EventUnionType>> {
 		debug('initialize', '⏳ Initializing systems...')
 		const systems = await Promise.all(creatorFunctions.map(async createSystem => createSystem(entities, settings)));
 		const manager = new SystemManager(systems);
@@ -31,26 +31,26 @@ export class SystemManager<
 	}
 
 	constructor(
-		private systems: System<EventsType>[],
+		private systems: System<EventUnionType>[],
 	) {}
 
-	#queue: SystemEvent<EventsType>[] = [];
+	#queue: EventUnionType[] = [];
 	#controller = new SignalController<{
 		settled(): void;
-		event(event: SystemEvent<EventsType>, result: Result<unknown>|undefined): void;
+		event(event: EventUnionType, result: Result<unknown>|undefined): void;
 	}>();
 	readonly signals = this.#controller.signal;
 
-	dispatchEvent<TypeName extends keyof EventsType>(eventType: TypeName): void;
-	dispatchEvent<TypeName extends keyof EventsType>(eventType: TypeName, payload: PayloadType<EventsType, TypeName>): void;
+	dispatchEvent<EventType extends EventUnionType>(eventType: EventType['type']): void;
+	dispatchEvent<EventType extends EventUnionType>(eventType: EventType['type'], payload: EventType['payload']): void;
 	dispatchEvent(eventType: string, payload: unknown): void;
-	dispatchEvent<TypeName extends keyof EventsType>(eventType: TypeName, payload?: any): void {
-		const event: SystemEvent<EventsType, TypeName> = {
+	dispatchEvent(eventType: string, payload?: unknown): void {
+		const event = {
 			id: uuid(),
 			type: eventType,
 			timestampMs: Date.now(),
 			payload,
-		};
+		} satisfies SystemEvent as EventUnionType;
 		debug('event-queued', 'Event added to queue.', event);
 		this.#queue.push(event);
 		if (this.#queue.length === 1) {
@@ -64,7 +64,7 @@ export class SystemManager<
 			return;
 		}
 		debug('process-queue', '▶ Starting processing event queue...', `(${this.#queue.length} events in queue.)`);
-		for (let event: SystemEvent<EventsType>|undefined; event = this.#queue.shift();) {
+		for (let event: EventUnionType|undefined; event = this.#queue.shift();) {
 			debug('process-queue', 'Processing event', event.id, event);
 			const result: Result<unknown> = this.#processEvent(event);
 			if (result.isErr()) {
@@ -77,11 +77,9 @@ export class SystemManager<
 	}
 
 	/** Runs an event through each systems until one of them handles it, then returns the result. */
-	#processEvent<TypeName extends keyof EventsType>(
-		event: SystemEvent<EventsType, TypeName>
-	): Result<ResultType<EventsType, TypeName>> {
-		let result: Result<ResultType<EventsType, TypeName>>|undefined;
-		const controller: SystemEventController<EventsType, TypeName> = {
+	#processEvent(event: EventUnionType): Result<unknown> {
+		let result: Result<unknown>|undefined;
+		const controller: SystemEventController<EventUnionType> = {
 			set(result) {
 				result = result;
 			},
@@ -98,7 +96,7 @@ export class SystemManager<
 					timestampMs: Date.now(),
 					payload,
 					parent: event,
-				};
+				} satisfies SystemEvent as EventUnionType;
 			},
 			stack: (eventType, payload) => {
 				return this.#processEvent({
@@ -107,7 +105,7 @@ export class SystemManager<
 					timestampMs: Date.now(),
 					payload,
 					parent: event,
-				});
+				} satisfies SystemEvent as EventUnionType);
 			},
 			defer: (eventType, payload) => {
 				this.#queue.push({
@@ -116,7 +114,7 @@ export class SystemManager<
 					timestampMs: Date.now(),
 					payload,
 					parent: event,
-				});
+				} satisfies SystemEvent as EventUnionType);
 			},
 			debug(...info) {
 				debug('handle-debug', event.type, { event }, ...info);

@@ -1,4 +1,4 @@
-import type { WorldDefinition } from '../world-definition.ts';
+import type { EmptyWorldDefinition } from '../world-definition.ts';
 
 export interface FrameData {
 	frameStart: number;
@@ -7,7 +7,7 @@ export interface FrameData {
 	fps: number;
 }
 
-export const FrameUpdatePlugin = (worldBuilder: WorldDefinition<{}, {}, {}, {}>) =>
+export const FrameUpdatePlugin = (worldBuilder: EmptyWorldDefinition) =>
 	worldBuilder.withComponents<{
 		frameData: FrameData,
 	}>()
@@ -19,9 +19,7 @@ export const FrameUpdatePlugin = (worldBuilder: WorldDefinition<{}, {}, {}, {}>)
 			fps: 0,
 		} satisfies FrameData,
 	})
-	.withEvents<{
-		update(frameData: FrameData): void,
-	}>()
+	.withEvent<'update', FrameData>()
 	.withSystem(entityStore => {
 		const frameData: FrameData = entityStore.queryId('#frameData')!.data.frameData!;
 		let fpsCounter = 0;
